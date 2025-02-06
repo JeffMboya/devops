@@ -413,7 +413,7 @@ postgresqlinvitations:
           postgresql: *postgresqlInvitationsPort
 
 jaeger:
-  fullnameOverride: magistrala-jaeger
+  fullnameOverride: supermq-jaeger
   provisionDataStore:
     cassandra: true
   agent:
