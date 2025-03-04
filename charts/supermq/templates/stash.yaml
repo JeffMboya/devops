@@ -1,0 +1,318 @@
+# Copyright (c) Abstract Machines
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: local-secret
+  namespace: smq
+type: Opaque
+data:
+  RESTIC_PASSWORD: MTIzNDU2Nzg=
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: do-block-storage
+provisioner: dobs.csi.digitalocean.com
+parameters:
+  fsType: ext4
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: repo-pvc
+  namespace: smq
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: do-block-storage
+
+---
+apiVersion: stash.appscode.com/v1alpha1
+kind: Repository
+metadata:
+  name: local-repo-with-pvc
+  namespace: smq
+spec:
+  backend:
+    local:
+      mountPath: /safe/data
+      persistentVolumeClaim:
+        claimName: repo-pvc
+  storageSecretName: local-secret
+
+---
+apiVersion: stash.appscode.com/v1beta1
+kind: BackupConfiguration
+metadata:
+  name: backup-all-databases
+  namespace: smq
+spec:
+  schedule: "*/1 * * * *"
+
+  retentionPolicy:
+    name: "keep-last-7"
+    keepLast: 7
+    prune: true
+
+  repository:
+    name: local-repo-with-pvc
+
+  executionOrder: Parallel
+
+  driver: Restic
+
+  runtimeSettings:
+    pod:
+      serviceAccountName: stash-backup
+
+  members:
+    - name: backup-postgresqlauth
+      target:
+        alias: pg-auth
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlauth
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlbackend
+      target:
+        alias: pg-backend
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlbackend
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlcerts
+      target:
+        alias: pg-certs
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlcerts
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlchannels
+      target:
+        alias: pg-channels
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlchannels
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlclients
+      target:
+        alias: pg-clients
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlclients
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqldomains
+      target:
+        alias: pg-domains
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqldomains
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlgroups
+      target:
+        alias: pg-groups
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlgroups
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqljournal
+      target:
+        alias: pg-journal
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqljournal
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlspicedb
+      target:
+        alias: pg-spicedb
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlspicedb
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-postgresqlusers
+      target:
+        alias: pg-users
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-postgresqlusers
+      task:
+        name: "postgres-backup-13.6"
+
+    - name: backup-cassandra
+      target:
+        alias: cassandra
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-cassandra
+      task:
+        name: "cassandra-backup-3.x"
+
+    - name: backup-redisclients
+      target:
+        alias: redis-clients
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-redisclients-master
+      task:
+        name: "redis-backup-6.x"
+
+    - name: backup-redisdomains
+      target:
+        alias: redis-domains
+        ref:
+          apiVersion: appcatalog.appscode.com/v1alpha1
+          kind: AppBinding
+          name: supermq-redisdomains-master
+      task:
+        name: "redis-backup-6.x"
+
+    - name: backup-mqtt-volume
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          name: supermq-mqtt
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/mqtt
+        paths:
+          - /var/lib/mqtt
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-nats-volume
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          name: supermq-nats
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/nats
+        paths:
+          - /var/lib/nats
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-nats-js
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          name: supermq-nats-js-supermq-nats
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/nats-js
+        paths:
+          - /var/lib/nats-js
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-alertmanager
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          name: supermq-alertmanager
+        volumeMounts:
+          - name: alertmanager-volume
+            mountPath: /alertmanager
+        paths:
+          - /alertmanager
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-prometheus
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          name: supermq-prometheus-server
+        volumeMounts:
+          - name: data
+            mountPath: /prometheus
+        paths:
+          - /prometheus
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-backend-deployment
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: supermq-backend
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/backend
+        paths:
+          - /var/lib/backend
+      task:
+        name: "stash-backup-volumes"
+
+    - name: backup-fluent-bit-daemonset
+      target:
+        ref:
+          apiVersion: apps/v1
+          kind: DaemonSet
+          name: supermq-fluent-bit
+        volumeMounts:
+          - name: logs
+            mountPath: /var/log/fluent-bit
+        paths:
+          - /var/log/fluent-bit
+      task:
+        name: "stash-backup-volumes"
+
+  hooks:
+    preBackup:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - "echo 'Global pre-backup hook: about to back up everything!'"
+    postBackup:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - "echo 'Global post-backup hook: backups done!'"
